@@ -90,13 +90,6 @@
   .results-title  { font-weight:600; font-size:13px; color:var(--accent2);
     text-transform:uppercase; letter-spacing:.3px; white-space:nowrap; }
 
-  .search-wrap { display:flex; align-items:center; gap:7px; background:#0d0f18;
-    border:1px solid var(--border); border-radius:6px; padding:5px 11px;
-    flex:1; min-width:160px; max-width:300px; }
-  .search-wrap input { background:transparent; border:none; color:var(--text);
-    font-family:var(--font); font-size:14px; outline:none; width:100%; }
-  .search-wrap input::placeholder { color:#445; }
-  .search-icon { color:var(--muted); font-size:14px; flex-shrink:0; }
 
   .action-filter { background:#0d0f18; border:1px solid var(--border); color:var(--text);
     font-family:var(--font); font-size:13px; padding:6px 28px 6px 10px; border-radius:6px;
@@ -122,12 +115,22 @@
   .thresh-unit{font-size:13px;color:var(--muted);}
   .thresh-desc{font-size:12px;color:#556;border-left:1px solid var(--border);
     padding-left:16px;line-height:1.5;}
+
+  /* Search in actions row */
+  .actions-row { align-items:center; }
+  .search-inline { display:flex; align-items:center; gap:7px; background:#0d0f18;
+    border:1px solid var(--border); border-radius:6px; padding:6px 12px;
+    min-width:200px; max-width:280px; }
+  .search-inline input { background:transparent; border:none; color:var(--text);
+    font-family:var(--font); font-size:14px; outline:none; width:100%; }
+  .search-inline input::placeholder { color:#445; }
+  .search-inline span { color:var(--muted); font-size:14px; flex-shrink:0; }
 </style>
 </head>
 <body>
 
 <header>
-  <h1>FEFO СЕДМИЧЕН Анализатор</h1>
+  <h1>FEFO Анализатор</h1>
   <p>First Expired — First Out &nbsp;|&nbsp; Прогнозен брак и действия по артикул</p>
 </header>
 
@@ -211,6 +214,10 @@
   <div style="grid-column:1/-1;background:transparent;border:none;">
     <div class="actions-row">
       <button class="run-btn" onclick="runAnalysis()">▶ Изчисли анализа</button>
+      <div class="search-inline">
+        <span>🔍</span>
+        <input type="text" id="searchInput" placeholder="Търси по ID или Артикул…" oninput="applyFilters()">
+      </div>
       <button class="clear-all-btn" onclick="clearAll()">✕ Изчисти всичко</button>
     </div>
   </div>
@@ -220,11 +227,6 @@
     <div class="results-header">
       <span class="results-title">📊 Резултати — FEFO анализ</span>
 
-      <div class="search-wrap">
-        <span class="search-icon">🔍</span>
-        <input type="text" id="searchInput" placeholder="Търси по ID или Артикул…" oninput="applyFilters()">
-      </div>
-
       <select class="action-filter" id="actionFilter" onchange="applyFilters()">
         <option value="">Всички</option>
         <option value="OK">✓ OK</option>
@@ -233,7 +235,7 @@
 
       <span class="filter-count" id="filterCount"></span>
 
-      <button class="btn-success" id="exportBtn" style="display:none" onclick="exportResults()">⬇ Експорт Excel</button>
+      <button class="btn-success" id="exportBtn" style="display:none" onclick="exportResults()">⬇ Експорт (филтър)</button>
     </div>
     <div id="summaryBar" class="summary-bar" style="display:none"></div>
     <div class="results-scroll">
@@ -277,6 +279,7 @@ function clearAll(){
   document.getElementById('stockImportStatus').textContent='';
   document.getElementById('salesImportStatus').textContent='';
   document.getElementById('searchInput').value='';
+  document.querySelectorAll('#stockBody tr, #salesBody tr').forEach(tr=>tr.style.display='');
   document.getElementById('actionFilter').value='';
   document.getElementById('filterCount').textContent='';
   document.getElementById('resultsContent').innerHTML='<div class="empty-results">Импортирайте или въведете данни и натиснете <strong>Изчисли анализа</strong></div>';
@@ -480,40 +483,79 @@ function runAnalysis(){
 function applyFilters(){
   const q=(document.getElementById('searchInput').value||'').toLowerCase().trim();
   const af=(document.getElementById('actionFilter').value||'').toUpperCase();
+
+  // ── Filter results table ──
   const tbl=document.getElementById('resultsTable');
-  if(!tbl){document.getElementById('filterCount').textContent='';return;}
-  const rows=[...tbl.querySelectorAll('tbody tr:not(.no-match-row)')];
-  let vis=0;
-  rows.forEach(tr=>{
-    const id=tr.dataset.id||'', name=tr.dataset.name||'', act=tr.dataset.action||'';
-    const mq=!q||id.includes(q)||name.includes(q);
-    const ma=!af||act===af;
-    if(mq&&ma){tr.classList.remove('row-hidden');vis++;}
-    else tr.classList.add('row-hidden');
+  let vis=0, total=0;
+  if(tbl){
+    const rows=[...tbl.querySelectorAll('tbody tr:not(.no-match-row)')];
+    total=rows.length;
+    rows.forEach(tr=>{
+      const id=tr.dataset.id||'', name=tr.dataset.name||'', act=tr.dataset.action||'';
+      const mq=!q||id.includes(q)||name.includes(q);
+      const ma=!af||act===af;
+      if(mq&&ma){tr.classList.remove('row-hidden');vis++;}
+      else tr.classList.add('row-hidden');
+    });
+    let nm=tbl.querySelector('.no-match-row');
+    if(vis===0&&total>0){
+      if(!nm){nm=document.createElement('tr');nm.className='no-match-row';
+        const td=document.createElement('td');td.colSpan=12;td.textContent='Няма намерени артикули.';
+        nm.appendChild(td);tbl.querySelector('tbody').appendChild(nm);}
+      nm.style.display='';
+    } else if(nm) nm.style.display='none';
+    document.getElementById('filterCount').textContent=vis+' / '+total+' артикула';
+  } else {
+    document.getElementById('filterCount').textContent='';
+  }
+
+  // ── Filter stock table (hide rows not matching search; ignore action filter) ──
+  document.querySelectorAll('#stockBody tr').forEach(tr=>{
+    if(!q){tr.style.display='';return;}
+    const inputs=tr.querySelectorAll('input');
+    const id=(inputs[0]?.value||'').toLowerCase();
+    const name=(inputs[1]?.value||'').toLowerCase();
+    tr.style.display=(id.includes(q)||name.includes(q))?'':'none';
   });
-  // no-match row
-  let nm=tbl.querySelector('.no-match-row');
-  if(vis===0&&rows.length>0){
-    if(!nm){nm=document.createElement('tr');nm.className='no-match-row';
-      const td=document.createElement('td');td.colSpan=12;td.textContent='Няма намерени артикули.';
-      nm.appendChild(td);tbl.querySelector('tbody').appendChild(nm);}
-    nm.style.display='';
-  } else if(nm) nm.style.display='none';
-  document.getElementById('filterCount').textContent=vis+' / '+rows.length+' артикула';
+
+  // ── Filter sales table ──
+  document.querySelectorAll('#salesBody tr').forEach(tr=>{
+    if(!q){tr.style.display='';return;}
+    const inputs=tr.querySelectorAll('input');
+    const id=(inputs[0]?.value||'').toLowerCase();
+    const name=(inputs[1]?.value||'').toLowerCase();
+    tr.style.display=(id.includes(q)||name.includes(q))?'':'none';
+  });
 }
 
 function exportResults(){
   if(!lastResults.length)return;
   const today=new Date();
   const thresh=parseInt(document.getElementById('threshRange').value)||6;
+  const q=(document.getElementById('searchInput').value||'').toLowerCase().trim();
+  const af=(document.getElementById('actionFilter').value||'').toUpperCase();
+
+  // Build export label for filename
+  const afLabel=af?'_'+af:'';
+  const qLabel=q?'_'+q:'';
+
+  // Filter lastResults to only visible rows (matching current filters)
+  const toExport=lastResults.filter(r=>{
+    const mq=!q||r.id.toLowerCase().includes(q)||(r.name||'').toLowerCase().includes(q);
+    const ma=!af||r.action===af;
+    return mq&&ma;
+  });
+
+  if(!toExport.length){alert('Няма редове за експорт при текущите филтри.');return;}
+
   const data=[['ID Артикул','Артикул','Наличност','Продажби/седм.','Седм. запас','Най-ранен срок','Седм. до изтичане','Праг (седм.)','Продаваемо','Очакван брак','Причина','Действие']];
-  lastResults.forEach(r=>data.push([r.id,r.name||'',r.totalStock,r.weekSales,r.weeksStock!==null?+fmt(r.weeksStock):'',
+  toExport.forEach(r=>data.push([r.id,r.name||'',r.totalStock,r.weekSales,r.weeksStock!==null?+fmt(r.weeksStock):'',
     fmtDate(new Date(r.lotsCalc[0].exp)),+fmt(r.weeksToExpMin),r.thresh,+fmt(r.totalSellable,0),+fmt(r.totalWaste,0),r.reason,r.action]));
   const ws=XLSX.utils.aoa_to_sheet(data);
   ws['!cols']=[10,25,12,14,12,16,14,8,12,13,18,10].map(w=>({wch:w}));
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,'FEFO Анализ');
-  XLSX.writeFile(wb,`FEFO_Анализ_${today.toISOString().split('T')[0]}.xlsx`);
+  XLSX.writeFile(wb,`FEFO_Анализ_${today.toISOString().split('T')[0]}${afLabel}${qLabel}.xlsx`);
 }
 
 // Demo seed
