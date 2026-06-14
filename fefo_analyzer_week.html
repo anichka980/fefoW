@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FEFO Анализатор на наличности</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg:#0f1117;--surface:#1a1d26;--surface2:#22263a;--border:#2e3352;
+    --accent:#4f7cff;--accent2:#00d4aa;--warn:#ffb347;--danger:#ff5a5a;
+    --ok:#3ecf8e;--text:#e8eaf6;--muted:#8891b8;
+    --font-mono:'JetBrains Mono','Fira Code','Arial',monospace;
+    --font:'Arial',Arial,sans-serif;--radius:8px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:15px;min-height:100vh;padding:24px 16px;}
+  header{text-align:center;margin-bottom:28px;}
+  header h1{font-size:26px;font-weight:700;letter-spacing:-.5px;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+  header p{color:var(--muted);margin-top:6px;font-size:13px;}
+  .layout{display:grid;grid-template-columns:1fr 1fr;gap:20px;max-width:1400px;margin:0 auto;}
+  @media(max-width:900px){.layout{grid-template-columns:1fr;}}
+  .panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;}
+  .panel-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--surface2);flex-wrap:wrap;gap:8px;}
+  .panel-title{font-weight:600;font-size:13px;letter-spacing:.3px;color:var(--accent2);text-transform:uppercase;}
+  .btn-group{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+  button{cursor:pointer;border:none;border-radius:5px;font-family:var(--font);font-size:12px;font-weight:600;padding:6px 12px;transition:opacity .15s,transform .1s;}
+  button:hover{opacity:.85;}
+  button:active{transform:scale(.97);}
+  .btn-danger{background:#3a1a1a;color:var(--danger);border:1px solid #5a2a2a;}
+  .btn-success{background:var(--accent2);color:#0f1117;}
+  .import-zone{padding:8px 16px 10px;border-bottom:1px solid var(--border);background:#12151f;display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+  .import-zone input[type=file]{display:none;}
+  .import-btn{background:#1e2a4a;color:var(--accent);border:1px solid #2e4080;font-size:12px;padding:6px 14px;border-radius:5px;cursor:pointer;font-family:var(--font);font-weight:600;white-space:nowrap;display:inline-flex;align-items:center;gap:0;user-select:none;}
+  .import-btn:hover{background:#253360;}
+  .import-status{font-size:11px;color:var(--accent2);font-style:italic;}
+  .col-hint{font-size:11px;color:#556;}
+  .row-count{font-size:11px;color:#556;padding:4px 16px 6px;background:#0d0f18;border-bottom:1px solid var(--border);}
+  .table-wrap{overflow-x:auto;max-height:340px;overflow-y:auto;}
+  table.editable{width:100%;border-collapse:collapse;font-size:13px;}
+  table.editable thead{position:sticky;top:0;z-index:2;}
+  table.editable th{background:var(--surface2);color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px;padding:9px 10px;border-bottom:1px solid var(--border);white-space:nowrap;text-align:left;}
+  table.editable td{padding:0;border-bottom:1px solid #1d2035;vertical-align:middle;}
+  table.editable td input{width:100%;background:transparent;border:none;color:var(--text);font-family:var(--font-mono);font-size:12px;padding:7px 10px;outline:none;transition:background .1s;}
+  table.editable td input:focus{background:#1e2340;}
+  table.editable tr:hover td{background:#14172099;}
+  .del-btn{background:transparent;color:#444;font-size:14px;padding:6px 10px;border-radius:4px;border:none;}
+  .del-btn:hover{color:var(--danger);background:#3a1a1a;}
+  .add-row-row td{padding:4px 8px;border-bottom:none;}
+  .btn-add-row{background:transparent;color:var(--muted);font-size:12px;border:1px dashed var(--border);padding:5px 12px;border-radius:4px;}
+  .btn-add-row:hover{border-color:var(--accent);color:var(--accent);background:#1a2040;}
+  .results-panel{grid-column:1/-1;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;}
+  .results-scroll{overflow-x:hidden;max-height:560px;overflow-y:auto;width:100%;}
+  table.results{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed;}
+  table.results thead{position:sticky;top:0;z-index:2;}
+  table.results th{background:#0d0f1a;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.3px;padding:8px 6px;border-bottom:1px solid var(--border);text-align:left;white-space:normal;word-break:break-word;line-height:1.3;vertical-align:bottom;}
+  table.results td{padding:9px 6px;border-bottom:1px solid #161929;font-family:var(--font-mono);font-size:13px;vertical-align:middle;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  table.results tr:hover td{background:#14172099;}
+  .badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.5px;}
+  .badge-ok{background:#0d2b1f;color:var(--ok);border:1px solid #1e5c3f;}
+  .badge-email{background:#2b1a0d;color:var(--warn);border:1px solid #5c3a1e;}
+  .num-warn{color:var(--warn);}.num-danger{color:var(--danger);}.num-ok{color:var(--ok);}
+  .actions-row{display:flex;gap:12px;padding:16px;justify-content:center;flex-wrap:wrap;}
+  .run-btn{background:linear-gradient(135deg,var(--accent),#7b5fff);color:#fff;font-size:14px;padding:10px 28px;border-radius:6px;font-weight:700;letter-spacing:.3px;}
+  .clear-all-btn{background:transparent;color:var(--muted);border:1px solid var(--border);font-size:13px;padding:10px 20px;border-radius:6px;}
+  .clear-all-btn:hover{color:var(--danger);border-color:var(--danger);background:#2b0d0d22;}
+  .empty-results{text-align:center;color:var(--muted);padding:40px;font-size:13px;}
+  .summary-bar{display:flex;gap:16px;padding:12px 16px;background:var(--surface2);border-bottom:1px solid var(--border);flex-wrap:wrap;}
+  .summary-item{font-size:12px;color:var(--muted);}
+  .summary-item span{font-weight:700;margin-left:5px;font-family:var(--font-mono);}
+  .s-ok{color:var(--ok);}.s-warn{color:var(--warn);}.s-total{color:var(--accent2);}
+
+  /* Column widths for fixed layout */
+  .results-panel table.results colgroup col:nth-child(1)  { width:7%; }   /* ID */
+  .results-panel table.results colgroup col:nth-child(2)  { width:15%; }  /* Артикул */
+  .results-panel table.results colgroup col:nth-child(3)  { width:6%; }   /* Наличност */
+  .results-panel table.results colgroup col:nth-child(4)  { width:6%; }   /* Прод/седм */
+  .results-panel table.results colgroup col:nth-child(5)  { width:6%; }   /* Седм запас */
+  .results-panel table.results colgroup col:nth-child(6)  { width:9%; }   /* Най-ранен срок */
+  .results-panel table.results colgroup col:nth-child(7)  { width:6%; }   /* Седм до изт */
+  .results-panel table.results colgroup col:nth-child(8)  { width:6%; }   /* Праг (седм.) */
+  .results-panel table.results colgroup col:nth-child(9)  { width:6%; }   /* Продаваемо */
+  .results-panel table.results colgroup col:nth-child(10) { width:7%; }   /* Очак брак */
+  .results-panel table.results colgroup col:nth-child(11) { width:13%; }  /* Причина */
+  .results-panel table.results colgroup col:nth-child(12) { width:9%; }   /* Действие */
+
+  /* Results header bar with search */
+  .results-header { display:flex; align-items:center; gap:10px; padding:10px 14px;
+    background:var(--surface2); border-bottom:1px solid var(--border); flex-wrap:wrap; }
+  .results-title  { font-weight:600; font-size:13px; color:var(--accent2);
+    text-transform:uppercase; letter-spacing:.3px; white-space:nowrap; }
+
+  .search-wrap { display:flex; align-items:center; gap:7px; background:#0d0f18;
+    border:1px solid var(--border); border-radius:6px; padding:5px 11px;
+    flex:1; min-width:160px; max-width:300px; }
+  .search-wrap input { background:transparent; border:none; color:var(--text);
+    font-family:var(--font); font-size:14px; outline:none; width:100%; }
+  .search-wrap input::placeholder { color:#445; }
+  .search-icon { color:var(--muted); font-size:14px; flex-shrink:0; }
+
+  .action-filter { background:#0d0f18; border:1px solid var(--border); color:var(--text);
+    font-family:var(--font); font-size:13px; padding:6px 28px 6px 10px; border-radius:6px;
+    cursor:pointer; outline:none; appearance:none; -webkit-appearance:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath fill='%238891b8' d='M5 7L0 2h10z'/%3E%3C/svg%3E");
+    background-repeat:no-repeat; background-position:right 8px center;
+    background-color:#0d0f18; }
+  .action-filter option { background:#1a1d26; }
+
+  .filter-count { font-size:12px; color:var(--muted); white-space:nowrap; margin-left:auto; }
+  tr.row-hidden { display:none; }
+  .no-match-row td { text-align:center; color:var(--muted); padding:28px; font-size:13px; }
+
+  /* Threshold slider bar */
+  .threshold-bar{grid-column:1/-1;background:var(--surface);border:1px solid var(--border);
+    border-radius:var(--radius);padding:13px 20px;display:flex;align-items:center;
+    gap:18px;flex-wrap:wrap;}
+  .thresh-label{font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;}
+  .thresh-slider-wrap{display:flex;align-items:center;gap:10px;}
+  .thresh-slider-wrap input[type=range]{accent-color:var(--accent);width:180px;cursor:pointer;}
+  .thresh-val{font-family:var(--font-mono);font-size:18px;font-weight:700;
+    color:var(--accent2);min-width:28px;text-align:center;}
+  .thresh-unit{font-size:13px;color:var(--muted);}
+  .thresh-desc{font-size:12px;color:#556;border-left:1px solid var(--border);
+    padding-left:16px;line-height:1.5;}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>FEFO Анализатор</h1>
+  <p>First Expired — First Out &nbsp;|&nbsp; Прогнозен брак и действия по артикул</p>
+</header>
+
+<div class="layout">
+
+  <!-- НАЛИЧНОСТИ -->
+  <div class="panel">
+    <div class="panel-header">
+      <span class="panel-title">📦 Наличности</span>
+      <div class="btn-group">
+        <label class="import-btn">⬆ Импорт Excel
+          <input type="file" id="fileStock" accept=".xlsx,.xls,.csv" onchange="importStock(this)" style="display:none">
+        </label>
+        <button class="btn-danger" onclick="clearTable('stockBody');updateCount('stockBody','stockCount')">🗑 Изчисти</button>
+      </div>
+    </div>
+    <div class="import-zone">
+      <span class="col-hint">Колони: <b>ID_Артикул · Име_Артикул · Наличност · Срок</b> </span>
+      <span class="import-status" id="stockImportStatus"></span>
+    </div>
+    <div class="row-count" id="stockCount">0 реда</div>
+    <div class="table-wrap">
+      <table class="editable">
+        <thead><tr><th>ID Артикул</th><th>Име Артикул</th><th>Наличност (бр)</th><th>Годен до</th><th></th></tr></thead>
+        <tbody id="stockBody"></tbody>
+        <tfoot>
+          <tr class="add-row-row"><td colspan="5">
+            <button class="btn-add-row" onclick="addStockRow();updateCount('stockBody','stockCount')">+ Добави ред</button>
+          </td></tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+
+  <!-- ПРОДАЖБИ -->
+  <div class="panel">
+    <div class="panel-header">
+      <span class="panel-title">🛒 Продажби за 1 седмица</span>
+      <div class="btn-group">
+        <label class="import-btn">⬆ Импорт Excel
+          <input type="file" id="fileSales" accept=".xlsx,.xls,.csv" onchange="importSales(this)" style="display:none">
+        </label>
+        <button class="btn-danger" onclick="clearTable('salesBody');updateCount('salesBody','salesCount')">🗑 Изчисти</button>
+      </div>
+    </div>
+    <div class="import-zone">
+      <span class="col-hint">Колони: <b>ID_Артикул · Име_Артикул · Продадени</b></span>
+      <span class="import-status" id="salesImportStatus"></span>
+    </div>
+    <div class="row-count" id="salesCount">0 реда</div>
+    <div class="table-wrap">
+      <table class="editable">
+        <thead><tr><th>ID Артикул</th><th>Име Артикул</th><th>Продадени (бр/седм.)</th><th></th></tr></thead>
+        <tbody id="salesBody"></tbody>
+        <tfoot>
+          <tr class="add-row-row"><td colspan="4">
+            <button class="btn-add-row" onclick="addSalesRow();updateCount('salesBody','salesCount')">+ Добави ред</button>
+          </td></tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+
+  <!-- ПРАГ -->
+  <div class="threshold-bar">
+    <span class="thresh-label">⚙ Праг за EMAIL сигнал:</span>
+    <div class="thresh-slider-wrap">
+      <span class="thresh-unit">3</span>
+      <input type="range" id="threshRange" min="3" max="9" value="6" step="1" oninput="syncThresh()">
+      <span class="thresh-unit">9</span>
+    </div>
+    <span class="thresh-val" id="threshVal">6</span>
+    <span class="thresh-unit">седмици</span>
+    <span class="thresh-desc">
+      EMAIL когато оставащите седмици &lt; прага<br>
+      <span style="color:#445">Движи плъзгача, след това натисни ▶ Изчисли</span>
+    </span>
+  </div>
+
+  <!-- БУТОНИ -->
+  <div style="grid-column:1/-1;background:transparent;border:none;">
+    <div class="actions-row">
+      <button class="run-btn" onclick="runAnalysis()">▶ Изчисли анализа</button>
+      <button class="clear-all-btn" onclick="clearAll()">✕ Изчисти всичко</button>
+    </div>
+  </div>
+
+  <!-- РЕЗУЛТАТИ -->
+  <div class="results-panel">
+    <div class="results-header">
+      <span class="results-title">📊 Резултати — FEFO анализ</span>
+
+      <div class="search-wrap">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="searchInput" placeholder="Търси по ID или Артикул…" oninput="applyFilters()">
+      </div>
+
+      <select class="action-filter" id="actionFilter" onchange="applyFilters()">
+        <option value="">Всички</option>
+        <option value="OK">✓ OK</option>
+        <option value="EMAIL">📧 EMAIL</option>
+      </select>
+
+      <span class="filter-count" id="filterCount"></span>
+
+      <button class="btn-success" id="exportBtn" style="display:none" onclick="exportResults()">⬇ Експорт Excel</button>
+    </div>
+    <div id="summaryBar" class="summary-bar" style="display:none"></div>
+    <div class="results-scroll">
+      <div id="resultsContent">
+        <div class="empty-results">Импортирайте или въведете данни и натиснете <strong>Изчисли анализа</strong></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function makeInput(val,type,ph){const i=document.createElement('input');i.type=type||'text';i.value=val!=null?val:'';i.placeholder=ph||'';if(type==='number')i.min='0';return i;}
+function updateCount(bid,cid){document.getElementById(cid).textContent=document.getElementById(bid).querySelectorAll('tr').length+' реда';}
+
+function delBtn(row,cid,bid){const b=document.createElement('button');b.className='del-btn';b.textContent='✕';b.onclick=()=>{row.remove();updateCount(bid,cid);};return b;}
+
+function addStockRow(id,name,qty,exp){
+  const tbody=document.getElementById('stockBody'),tr=document.createElement('tr');
+  const td1=document.createElement('td');td1.appendChild(makeInput(id,'text','1001'));
+  const td2=document.createElement('td');td2.appendChild(makeInput(name,'text','Артикул'));
+  const td3=document.createElement('td');td3.appendChild(makeInput(qty,'number','0'));
+  const td4=document.createElement('td');td4.appendChild(makeInput(exp,'date',''));
+  const td5=document.createElement('td');td5.appendChild(delBtn(tr,'stockCount','stockBody'));
+  tr.append(td1,td2,td3,td4,td5);tbody.appendChild(tr);updateCount('stockBody','stockCount');
+}
+
+function addSalesRow(id,name,qty){
+  const tbody=document.getElementById('salesBody'),tr=document.createElement('tr');
+  const td1=document.createElement('td');td1.appendChild(makeInput(id,'text','1001'));
+  const td2=document.createElement('td');td2.appendChild(makeInput(name,'text','Артикул'));
+  const td3=document.createElement('td');td3.appendChild(makeInput(qty,'number','0'));
+  const td4=document.createElement('td');td4.appendChild(delBtn(tr,'salesCount','salesBody'));
+  tr.append(td1,td2,td3,td4);tbody.appendChild(tr);updateCount('salesBody','salesCount');
+}
+
+function clearTable(bid){document.getElementById(bid).innerHTML='';}
+
+function clearAll(){
+  clearTable('stockBody');updateCount('stockBody','stockCount');
+  clearTable('salesBody');updateCount('salesBody','salesCount');
+  document.getElementById('stockImportStatus').textContent='';
+  document.getElementById('salesImportStatus').textContent='';
+  document.getElementById('searchInput').value='';
+  document.getElementById('actionFilter').value='';
+  document.getElementById('filterCount').textContent='';
+  document.getElementById('resultsContent').innerHTML='<div class="empty-results">Импортирайте или въведете данни и натиснете <strong>Изчисли анализа</strong></div>';
+  document.getElementById('summaryBar').style.display='none';
+  document.getElementById('exportBtn').style.display='none';
+  lastResults=[];
+}
+
+function parseExcelDate(val){
+  if(!val)return'';
+  if(val instanceof Date)return val.toISOString().split('T')[0];
+  if(typeof val==='number'){const d=XLSX.SSF.parse_date_code(val);if(d){return`${d.y}-${String(d.m).padStart(2,'0')}-${String(d.d).padStart(2,'0')}`;}}
+  const s=String(val).trim();
+  const bg=s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);if(bg)return`${bg[3]}-${bg[2].padStart(2,'0')}-${bg[1].padStart(2,'0')}`;
+  const sl=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);if(sl)return`${sl[3]}-${sl[2].padStart(2,'0')}-${sl[1].padStart(2,'0')}`;
+  if(/^\d{4}-\d{2}-\d{2}/.test(s))return s.substring(0,10);
+  return s;
+}
+
+function findCol(hdrs,...kws){
+  for(const kw of kws){const k=kw.toLowerCase();const i=hdrs.findIndex(h=>String(h).toLowerCase().replace(/[\s_]/g,'').includes(k.replace(/[\s_]/g,'')));if(i!==-1)return i;}
+  return -1;
+}
+
+function importStock(input){
+  const file=input.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const wb=XLSX.read(e.target.result,{type:'binary',cellDates:false});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+      if(rows.length<2){alert('Файлът е празен.');return;}
+      const hdrs=rows[0].map(h=>String(h).trim());
+      const cId  =findCol(hdrs,'id_артикул','idартикул','id артикул','id','artid','artkul_id');
+      const cName=findCol(hdrs,'имеартикул','иmeартикул','имеартикул','имеарт','name','наименование','артикул','product');
+      const cQty =findCol(hdrs,'наличност','количество','qty','amount','бр','stock');
+      const cExp =findCol(hdrs,'срок','годен','expir','дата','date','best','shelf');
+      if(cId===-1||cQty===-1||cExp===-1){
+        alert('Не намерих нужните колони.\nОчаквам: ID_Артикул | Иme_Артикул | Наличност | Срок\n\nНамерени: '+hdrs.join(', '));return;
+      }
+      clearTable('stockBody');
+      let n=0;
+      for(let i=1;i<rows.length;i++){
+        const r=rows[i];
+        const id=String(r[cId]||'').trim();
+        const name=cName!==-1?String(r[cName]||'').trim():'';
+        const qty=parseFloat(r[cQty])||0;
+        const exp=parseExcelDate(r[cExp]);
+        if(!id&&qty===0)continue;
+        addStockRow(id,name,qty,exp);n++;
+      }
+      document.getElementById('stockImportStatus').textContent=`✓ Заредени ${n} реда от "${file.name}"`;
+    }catch(err){alert('Грешка: '+err.message);}
+  };
+  reader.readAsBinaryString(file);input.value='';
+}
+
+function importSales(input){
+  const file=input.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const wb=XLSX.read(e.target.result,{type:'binary',cellDates:false});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+      if(rows.length<2){alert('Файлът е празен.');return;}
+      const hdrs=rows[0].map(h=>String(h).trim());
+      const cId  =findCol(hdrs,'id_артикул','idартикул','id артикул','id','artid','artkul_id');
+      const cName=findCol(hdrs,'имеартикул','иmeартикул','имеартикул','имеарт','name','наименование','артикул','product');
+      const cQty =findCol(hdrs,'продадени','продажби','sales','qty','amount','бр','седмица','week');
+      if(cId===-1||cQty===-1){
+        alert('Не намерих нужните колони.\nОчаквам: ID_Артикул | Иme_Артикул | Продадени\n\nНамерени: '+hdrs.join(', '));return;
+      }
+      clearTable('salesBody');
+      let n=0;
+      for(let i=1;i<rows.length;i++){
+        const r=rows[i];
+        const id=String(r[cId]||'').trim();
+        const name=cName!==-1?String(r[cName]||'').trim():'';
+        const qty=parseFloat(r[cQty])||0;
+        if(!id&&qty===0)continue;
+        addSalesRow(id,name,qty);n++;
+      }
+      document.getElementById('salesImportStatus').textContent=`✓ Заредени ${n} реда от "${file.name}"`;
+    }catch(err){alert('Грешка: '+err.message);}
+  };
+  reader.readAsBinaryString(file);input.value='';
+}
+
+function readStock(){
+  const lots=[];
+  document.querySelectorAll('#stockBody tr').forEach(tr=>{
+    const inp=tr.querySelectorAll('input');if(!inp.length)return;
+    const id=inp[0].value.trim(),name=inp[1].value.trim(),qty=parseFloat(inp[2].value)||0,exp=inp[3].value;
+    if(id&&qty>0&&exp)lots.push({id,name,qty,exp:new Date(exp)});
+  });
+  return lots;
+}
+
+function readSales(){
+  const map={};
+  document.querySelectorAll('#salesBody tr').forEach(tr=>{
+    const inp=tr.querySelectorAll('input');if(!inp.length)return;
+    const id=inp[0].value.trim(),name=inp[1].value.trim(),qty=parseFloat(inp[2].value)||0;
+    if(id){if(!map[id])map[id]={qty:0,name:''};map[id].qty+=qty;if(name)map[id].name=name;}
+  });
+  return map;
+}
+
+function syncThresh(){
+  const v=parseInt(document.getElementById('threshRange').value)||6;
+  document.getElementById('threshVal').textContent=v;
+}
+
+function fefoAnalysis(lots,salesMap,today,thresh){
+  const byId={};
+  lots.forEach(l=>{
+    if(!byId[l.id])byId[l.id]={name:l.name,lots:[]};
+    byId[l.id].lots.push({qty:l.qty,exp:l.exp});
+    if(l.name&&!byId[l.id].name)byId[l.id].name=l.name;
+  });
+  Object.values(byId).forEach(a=>a.lots.sort((a,b)=>a.exp-b.exp));
+  const results=[];
+  Object.entries(byId).forEach(([id,art])=>{
+    const se=salesMap[id];
+    const weekSales=se?se.qty:0;
+    const artName=art.name||(se?se.name:'')||'';
+    const totalStock=art.lots.reduce((s,l)=>s+l.qty,0);
+    const lotsCalc=art.lots.map(lot=>{
+      const weeksToExp=(lot.exp-today)/(7*24*3600*1000);
+      const sellable=weekSales>0?Math.min(lot.qty,weekSales*Math.max(0,weeksToExp)):0;
+      return{exp:lot.exp,qty:lot.qty,weeksToExp,sellable,waste:Math.max(0,lot.qty-sellable)};
+    });
+    const weeksToExpMin=(art.lots[0].exp-today)/(7*24*3600*1000);
+    const weeksStock=weekSales>0?totalStock/weekSales:Infinity;
+    const totalSellable=lotsCalc.reduce((s,l)=>s+l.sellable,0);
+    const totalWaste=lotsCalc.reduce((s,l)=>s+l.waste,0);
+    const emailByExp=weeksToExpMin<thresh,emailByWaste=totalWaste>0;
+    const action=(emailByExp||emailByWaste)?'EMAIL':'OK';
+    const reason=emailByWaste&&emailByExp?'Брак + Кратък срок':emailByWaste?'Очакван брак':emailByExp?'Кратък срок':'—';
+    results.push({id,name:artName,totalStock,weekSales,weeksStock:isFinite(weeksStock)?weeksStock:null,weeksToExpMin,thresh,totalSellable,totalWaste,action,reason,lotsCalc});
+  });
+  return results;
+}
+
+function fmt(n,d=1){if(n===null||!isFinite(n))return'∞';return n.toFixed(d);}
+function fmtDate(d){return d.toLocaleDateString('bg-BG',{day:'2-digit',month:'2-digit',year:'numeric'});}
+
+let lastResults=[];
+
+function runAnalysis(){
+  const today=new Date();today.setHours(0,0,0,0);
+  const thresh=parseInt(document.getElementById('threshRange').value)||6;
+  const lots=readStock(),sales=readSales();
+  if(!lots.length){alert('Няма наличности с валидни данни (ID, количество и дата са задължителни).');return;}
+  const results=fefoAnalysis(lots,sales,today,thresh);
+  lastResults=results;
+  const cntOk=results.filter(r=>r.action==='OK').length;
+  const cntEmail=results.filter(r=>r.action==='EMAIL').length;
+  const sb=document.getElementById('summaryBar');
+  sb.style.display='flex';
+  sb.innerHTML=`<div class="summary-item">Общо артикули: <span class="s-total">${results.length}</span></div>
+    <div class="summary-item">✅ OK: <span class="s-ok">${cntOk}</span></div>
+    <div class="summary-item">📧 EMAIL: <span class="s-warn">${cntEmail}</span></div>
+    <div class="summary-item">Праг: <span class="s-total">${thresh} седм.</span></div>
+    <div class="summary-item">Дата: <span>${fmtDate(today)}</span></div>`;
+  let html=`<table class="results" id="resultsTable">
+  <colgroup><col><col><col><col><col><col><col><col><col><col><col><col></colgroup>
+  <thead><tr>
+    <th>ID</th><th>Артикул</th><th>Наличност</th><th>Прод./ седм.</th>
+    <th>Седм. запас</th><th>Най-ранен срок</th><th>Седм. до изтич.</th>
+    <th>Праг (седм.)</th><th>Продаваемо</th><th>Очакван брак</th><th>Причина</th><th>Действие</th>
+  </tr></thead><tbody>`;
+  results.forEach(r=>{
+    const wc=r.weeksToExpMin<(r.thresh*0.5)?'num-danger':r.weeksToExpMin<r.thresh?'num-warn':'num-ok';
+    const wsc=r.totalWaste>0?'num-danger':'num-ok';
+    const badge=r.action==='OK'?'<span class="badge badge-ok">✓ OK</span>':'<span class="badge badge-email">📧 EMAIL</span>';
+    html+=`<tr data-id="${r.id.toLowerCase()}" data-name="${(r.name||'').toLowerCase()}" data-action="${r.action}">
+      <td>${r.id}</td><td>${r.name||'—'}</td><td>${r.totalStock.toFixed(0)}</td>
+      <td>${r.weekSales>0?r.weekSales.toFixed(0):'<span class="num-warn">—</span>'}</td>
+      <td class="${r.weeksStock!==null&&r.weeksStock<r.thresh?'num-warn':''}">${r.weeksStock!==null?fmt(r.weeksStock):'∞'}</td>
+      <td>${fmtDate(new Date(r.lotsCalc[0].exp))}</td>
+      <td class="${wc}">${fmt(r.weeksToExpMin)}</td>
+      <td style="color:var(--accent);font-weight:600">${r.thresh}</td>
+      <td>${fmt(r.totalSellable,0)}</td>
+      <td class="${wsc}">${fmt(r.totalWaste,0)}</td>
+      <td style="color:var(--muted);font-size:11px">${r.reason}</td>
+      <td>${badge}</td>
+    </tr>`;
+  });
+  html+=`</tbody></table>`;
+  document.getElementById('resultsContent').innerHTML=html;
+  document.getElementById('exportBtn').style.display='inline-block';
+  document.getElementById('searchInput').value='';
+  document.getElementById('actionFilter').value='';
+  document.getElementById('filterCount').textContent=results.length+' артикула';
+}
+
+
+function applyFilters(){
+  const q=(document.getElementById('searchInput').value||'').toLowerCase().trim();
+  const af=(document.getElementById('actionFilter').value||'').toUpperCase();
+  const tbl=document.getElementById('resultsTable');
+  if(!tbl){document.getElementById('filterCount').textContent='';return;}
+  const rows=[...tbl.querySelectorAll('tbody tr:not(.no-match-row)')];
+  let vis=0;
+  rows.forEach(tr=>{
+    const id=tr.dataset.id||'', name=tr.dataset.name||'', act=tr.dataset.action||'';
+    const mq=!q||id.includes(q)||name.includes(q);
+    const ma=!af||act===af;
+    if(mq&&ma){tr.classList.remove('row-hidden');vis++;}
+    else tr.classList.add('row-hidden');
+  });
+  // no-match row
+  let nm=tbl.querySelector('.no-match-row');
+  if(vis===0&&rows.length>0){
+    if(!nm){nm=document.createElement('tr');nm.className='no-match-row';
+      const td=document.createElement('td');td.colSpan=12;td.textContent='Няма намерени артикули.';
+      nm.appendChild(td);tbl.querySelector('tbody').appendChild(nm);}
+    nm.style.display='';
+  } else if(nm) nm.style.display='none';
+  document.getElementById('filterCount').textContent=vis+' / '+rows.length+' артикула';
+}
+
+function exportResults(){
+  if(!lastResults.length)return;
+  const today=new Date();
+  const thresh=parseInt(document.getElementById('threshRange').value)||6;
+  const data=[['ID Артикул','Артикул','Наличност','Продажби/седм.','Седм. запас','Най-ранен срок','Седм. до изтичане','Праг (седм.)','Продаваемо','Очакван брак','Причина','Действие']];
+  lastResults.forEach(r=>data.push([r.id,r.name||'',r.totalStock,r.weekSales,r.weeksStock!==null?+fmt(r.weeksStock):'',
+    fmtDate(new Date(r.lotsCalc[0].exp)),+fmt(r.weeksToExpMin),r.thresh,+fmt(r.totalSellable,0),+fmt(r.totalWaste,0),r.reason,r.action]));
+  const ws=XLSX.utils.aoa_to_sheet(data);
+  ws['!cols']=[10,25,12,14,12,16,14,8,12,13,18,10].map(w=>({wch:w}));
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'FEFO Анализ');
+  XLSX.writeFile(wb,`FEFO_Анализ_${today.toISOString().split('T')[0]}.xlsx`);
+}
+
+// Demo seed
+(function(){
+  const today=new Date();
+  const d=w=>{const dt=new Date(today);dt.setDate(dt.getDate()+w*7);return dt.toISOString().split('T')[0];};
+  addStockRow('1001','Кисело мляко 400г',350,d(6));
+  addStockRow('1001','Кисело мляко 400г',200,d(11));
+  addStockRow('1002','Сирене 500г',80,d(4));
+  addStockRow('1002','Сирене 500г',120,d(8));
+  addStockRow('1003','Масло 250г',500,d(20));
+  addStockRow('1004','Крема сирене',30,d(2));
+  addStockRow('1005','Заквасена сметана',90,d(10));
+  addStockRow('1005','Заквасена сметана',60,d(14));
+  addSalesRow('1001','Кисело мляко 400г',120);
+  addSalesRow('1002','Сирене 500г',40);
+  addSalesRow('1003','Масло 250г',25);
+  addSalesRow('1004','Крема сирене',15);
+  addSalesRow('1005','Заквасена сметана',35);
+})();
+</script>
+</body>
+</html>
