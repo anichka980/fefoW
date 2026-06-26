@@ -4,143 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>FEFO Анализатор на наличности</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js">
-// ══ АРХИВ (localStorage) ═════════════════════════════════════════════════════
-const ARCHIVE_KEY = 'fefo_archive';
-
-function archiveGetAll(){
-  try{ return JSON.parse(localStorage.getItem(ARCHIVE_KEY)||'[]'); }
-  catch(e){ return []; }
-}
-
-function archiveSaveAll(arr){
-  localStorage.setItem(ARCHIVE_KEY, JSON.stringify(arr));
-}
-
-function refreshArchiveSelect(selectVal){
-  const arr = archiveGetAll();
-  const sel = document.getElementById('archiveSelect');
-  sel.innerHTML = '<option value="">— Избери запазена справка —</option>';
-  arr.forEach((snap,i)=>{
-    const opt = document.createElement('option');
-    opt.value = i;
-    opt.textContent = snap.label;
-    sel.appendChild(opt);
-  });
-  if(selectVal!==undefined) sel.value = selectVal;
-  document.getElementById('archiveHint').textContent =
-    arr.length ? arr.length + ' запазени справки' : 'Няма запазени справки';
-}
-
-function saveSnapshot(){
-  if(!lastResults.length){ alert('Няма изчислен анализ за запазване.'); return; }
-  const today = new Date();
-  const thresh = parseInt(document.getElementById('threshRange').value)||6;
-  const dd=String(today.getDate()).padStart(2,'0');
-  const mm=String(today.getMonth()+1).padStart(2,'0');
-  const yyyy=today.getFullYear();
-  const hh=String(today.getHours()).padStart(2,'0');
-  const min=String(today.getMinutes()).padStart(2,'0');
-  const label = `${dd}.${mm}.${yyyy}, ${hh}:${min}`;
-
-  // Запазваме: данните от таблиците + резултатите + HTML на таблицата + дата
-  const stockData = [];
-  document.querySelectorAll('#stockBody tr').forEach(tr=>{
-    const inp=tr.querySelectorAll('input');if(!inp.length)return;
-    stockData.push([inp[0].value,inp[1].value,inp[2].value,inp[3].value]);
-  });
-  const salesData = [];
-  document.querySelectorAll('#salesBody tr').forEach(tr=>{
-    const inp=tr.querySelectorAll('input');if(!inp.length)return;
-    salesData.push([inp[0].value,inp[1].value,inp[2].value]);
-  });
-
-  const snap = {
-    label,
-    date: today.toISOString(),
-    thresh,
-    stockData,
-    salesData,
-    summaryHTML: document.getElementById('summaryBar').innerHTML,
-    resultsHTML: document.getElementById('resultsContent').innerHTML,
-    resultsCount: lastResults.length,
-    lastResults: JSON.parse(JSON.stringify(lastResults))
-  };
-
-  const arr = archiveGetAll();
-  arr.unshift(snap); // най-новото първо
-  archiveSaveAll(arr);
-  refreshArchiveSelect(0);
-  document.getElementById('archiveHint').textContent = '✓ Справката е запазена!';
-  setTimeout(()=>refreshArchiveSelect(document.getElementById('archiveSelect').value), 2000);
-}
-
-function loadSnapshot(idx){
-  if(idx===''||idx===null||idx===undefined) return;
-  const arr = archiveGetAll();
-  const snap = arr[parseInt(idx)];
-  if(!snap){ alert('Справката не е намерена.'); return; }
-
-  // Зареждаме входните данни
-  clearTable('stockBody');
-  snap.stockData.forEach(r=> addStockRow(r[0],r[1],parseFloat(r[2])||0,r[3]));
-  updateCount('stockBody','stockCount');
-
-  clearTable('salesBody');
-  snap.salesData.forEach(r=> addSalesRow(r[0],r[1],parseFloat(r[2])||0));
-  updateCount('salesBody','salesCount');
-
-  // Праг
-  document.getElementById('threshRange').value = snap.thresh;
-  syncThresh();
-
-  // Показваме стария анализ директно
-  const sb = document.getElementById('summaryBar');
-  sb.innerHTML = snap.summaryHTML +
-    `<div class="summary-item"><span class="archive-viewing">📂 Архивна справка</span></div>`;
-  sb.style.display = 'flex';
-
-  document.getElementById('resultsContent').innerHTML = snap.resultsHTML;
-  document.getElementById('exportBtn').style.display = 'inline-block';
-  document.getElementById('exportWordBtn').style.display = 'inline-block';
-  document.getElementById('saveSnapBtn').style.display = 'none';
-
-  // Възстановяваме lastResults — конвертираме датите обратно към Date обекти
-  lastResults = (snap.lastResults || []).map(r => ({
-    ...r,
-    monthSales: Number(r.monthSales) || 0,
-    weekSales: Number(r.weekSales) || 0,
-    totalStock: Number(r.totalStock) || 0,
-    totalSellable: Number(r.totalSellable) || 0,
-    totalWaste: Number(r.totalWaste) || 0,
-    lotsCalc: (r.lotsCalc || []).map(l => ({
-      ...l,
-      exp: new Date(l.exp),
-      qty: Number(l.qty) || 0,
-      waste: Number(l.waste) || 0,
-      sellable: Number(l.sellable) || 0
-    }))
-  }));
-
-  document.getElementById('archiveHint').textContent = '📂 Заредена: ' + snap.label;
-}
-
-function deleteSnapshot(){
-  const sel = document.getElementById('archiveSelect');
-  const idx = sel.value;
-  if(idx===''){ alert('Избери справка за изтриване.'); return; }
-  const arr = archiveGetAll();
-  const snap = arr[parseInt(idx)];
-  if(!confirm(`Изтрий справката "${snap.label}"?`)) return;
-  arr.splice(parseInt(idx),1);
-  archiveSaveAll(arr);
-  refreshArchiveSelect('');
-}
-
-// Инициализация при зареждане
-refreshArchiveSelect('');
-
-</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   /* ── Тъмна тема ── */
   :root, body.theme-dark {
@@ -156,8 +20,7 @@ refreshArchiveSelect('');
     --zone-bg:#12151f;--res-th-bg:#080a12;
     --exp-row-bg:rgba(180,60,0,.13);--exp-row-border:rgba(220,90,0,.25);
     --insight-bg:#141820;--insight-border:#2a3060;
-    --font-mono:'Courier New',monospace;
-    --font:'Arial',Arial,sans-serif;--radius:8px;
+    --font:'Arial',sans-serif;--radius:8px;
   }
   /* ── Светла тема ── */
   body.theme-light {
@@ -173,8 +36,7 @@ refreshArchiveSelect('');
     --zone-bg:#dde3ee;--res-th-bg:#c8d4e8;
     --exp-row-bg:rgba(200,80,0,.08);--exp-row-border:rgba(200,80,0,.2);
     --insight-bg:#e8ecf6;--insight-border:#8090c0;
-    --font-mono:'Courier New',monospace;
-    --font:'Arial',Arial,sans-serif;--radius:8px;
+    --font:'Arial',sans-serif;--radius:8px;
   }
   body.theme-light header h1 {
     background:linear-gradient(135deg,var(--accent),var(--accent2));
@@ -218,7 +80,7 @@ refreshArchiveSelect('');
   table.editable th{background:var(--surface2);color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px;padding:9px 10px;border-bottom:1px solid var(--border);white-space:nowrap;text-align:left;}
   table.editable tbody tr:nth-child(even) td{background:var(--row-alt);}
   table.editable td{padding:0;border-bottom:1px solid var(--td-border);vertical-align:middle;}
-  table.editable td input{width:100%;background:transparent;border:none;color:var(--text);font-family:var(--font-mono);font-size:12px;padding:7px 10px;outline:none;transition:background .1s;}
+  table.editable td input{width:100%;background:transparent;border:none;color:var(--text);font-family:monospace;font-size:12px;padding:7px 10px;outline:none;transition:background .1s;}
   table.editable td input:focus{background:var(--surface2);}
   table.editable tr:hover td{background:var(--row-hover)!important;}
   .del-btn{background:transparent;color:#667;font-size:14px;padding:6px 10px;border-radius:4px;border:none;}
@@ -233,7 +95,7 @@ refreshArchiveSelect('');
   .thresh-label{font-size:13px;font-weight:700;color:var(--text);}
   .thresh-slider-wrap{display:flex;align-items:center;gap:10px;}
   .thresh-slider-wrap input[type=range]{accent-color:var(--accent);width:200px;cursor:pointer;}
-  .thresh-val{font-family:var(--font-mono);font-size:22px;font-weight:700;color:var(--accent2);min-width:28px;text-align:center;}
+  .thresh-val{font-family:monospace;font-size:22px;font-weight:700;color:var(--accent2);min-width:28px;text-align:center;}
   .thresh-unit{font-size:13px;color:var(--muted);}
   .thresh-definition{font-size:13px;color:var(--text);border-left:3px solid var(--accent2);padding-left:12px;line-height:1.4;max-width:320px;}
   .thresh-definition strong{color:var(--accent2);}
@@ -257,7 +119,7 @@ refreshArchiveSelect('');
   .filter-count{font-size:12px;color:var(--muted);white-space:nowrap;margin-left:auto;}
   .summary-bar{display:flex;gap:16px;padding:12px 16px;background:var(--surface2);border-bottom:1px solid var(--border);flex-wrap:wrap;}
   .summary-item{font-size:12px;color:var(--muted);}
-  .summary-item span{font-weight:700;margin-left:5px;font-family:var(--font-mono);}
+  .summary-item span{font-weight:700;margin-left:5px;font-family:monospace;}
   .s-ok{color:var(--ok);}.s-warn{color:var(--warn);}.s-total{color:var(--accent2);}
 
   /* ── Results table ── */
@@ -265,17 +127,11 @@ refreshArchiveSelect('');
   table.results{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed;}
   table.results thead{position:sticky;top:0;z-index:2;}
   table.results th{background:var(--res-th-bg);color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.3px;padding:8px 6px;border-bottom:2px solid var(--border);text-align:left;white-space:normal;word-break:break-word;line-height:1.3;vertical-align:bottom;}
-  /* Зебра: редовете идват по двойки (основен + детайл), затова 4n+3 и 4n+4 */
   table.results tbody tr:nth-child(4n+3):not(.no-match-row) td,
   table.results tbody tr:nth-child(4n+4):not(.no-match-row) td{background:var(--row-alt);}
-  table.results td{padding:9px 6px;border-bottom:none;border-right:1px solid var(--td-border);font-family:var(--font-mono);font-size:13px;vertical-align:top;overflow:hidden;text-overflow:ellipsis;}
+  table.results td{padding:9px 6px;border-bottom:none;border-right:1px solid var(--td-border);font-family:monospace;font-size:13px;vertical-align:top;overflow:hidden;text-overflow:ellipsis;}
   table.results tr:not(.row-detail):hover td{background:var(--row-hover)!important;}
-
-  /* Name column wraps */
   table.results td.col-name{white-space:normal;word-break:break-word;line-height:1.4;font-family:var(--font);}
-
-  /* Highlighted rows (EMAIL) */
-  table.results tr.row-email td{border-left:none;}
   table.results tr.row-email:nth-child(even) td{background:var(--exp-row-bg);}
 
   /* Column widths */
@@ -301,41 +157,32 @@ refreshArchiveSelect('');
   .badge-email{background:var(--badge-em-bg);color:var(--warn);border:1px solid var(--badge-em-border);}
   .num-warn{color:var(--warn);font-weight:600;}.num-danger{color:var(--danger);font-weight:700;}.num-ok{color:var(--ok);}
 
-  /* ── Insight row (collapsible detail) ── */
   .row-detail{background:var(--insight-bg)!important;}
   .row-detail td{padding:0!important;border:none!important;}
   .insight-box{padding:12px 16px;font-size:13px;line-height:1.7;color:var(--text);border-left:3px solid var(--accent2);margin:0;}
-  .insight-box.warn-insight{border-left-color:var(--warn);}
+  .insight-box.warn-insight {border-left-color:var(--warn);}
   .insight-box.danger-insight{border-left-color:var(--danger);}
-  .insight-num{font-weight:700;font-family:var(--font-mono);color:var(--accent2);}
+  .insight-num{font-weight:700;font-family:monospace;color:var(--accent2);}
   .insight-box.warn-insight .insight-num{color:var(--warn);}
   .insight-box.danger-insight .insight-num{color:var(--danger);}
   .toggle-detail{background:none;border:none;cursor:pointer;color:var(--muted);font-size:11px;padding:2px 5px;border-radius:3px;font-family:var(--font);}
   .toggle-detail:hover{color:var(--accent2);background:var(--surface2);}
 
-  /* ── Word export button ── */
   .btn-word{background:#2b5797;color:#fff;font-weight:700;font-size:12px;}
   body.theme-light .btn-word{background:#1a3d78;}
-
   .empty-results{text-align:center;color:var(--muted);padding:40px;font-size:13px;}
 
-  /* ── Архив (вграден в threshold-bar) ── */
-  .archive-section{border-left:1px solid var(--border);padding-left:18px;
-    display:flex;flex-direction:column;gap:7px;min-width:220px;}
+  /* ── Архив ── */
+  .archive-section{border-left:1px solid var(--border);padding-left:18px;display:flex;flex-direction:column;gap:7px;min-width:220px;}
   .archive-label{font-size:12px;font-weight:700;color:var(--accent2);}
   .archive-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
-  #archiveSelect{background:var(--input-bg);border:1px solid var(--border);color:var(--text);
-    font-family:var(--font);font-size:12px;padding:5px 8px;border-radius:6px;
-    cursor:pointer;outline:none;max-width:260px;flex:1;}
+  #archiveSelect{background:var(--input-bg);border:1px solid var(--border);color:var(--text);font-family:var(--font);font-size:12px;padding:5px 8px;border-radius:6px;cursor:pointer;outline:none;max-width:260px;flex:1;}
   #archiveSelect option{background:var(--surface);}
-  .btn-arch-del{background:var(--del-hover);color:var(--danger);border:1px solid var(--danger);
-    opacity:.75;font-size:11px;padding:5px 10px;border-radius:5px;white-space:nowrap;}
-  .btn-save-snap{background:linear-gradient(135deg,#1a7a4a,#0a5a8a);color:#fff;
-    font-size:11px;font-weight:700;padding:5px 12px;border-radius:5px;white-space:nowrap;}
+  .btn-arch-del{background:var(--del-hover);color:var(--danger);border:1px solid var(--danger);opacity:.75;font-size:11px;padding:5px 10px;border-radius:5px;white-space:nowrap;}
+  .btn-save-snap{background:linear-gradient(135deg,#1a7a4a,#0a5a8a);color:#fff;font-size:11px;font-weight:700;padding:5px 12px;border-radius:5px;white-space:nowrap;}
   .btn-save-snap:hover{opacity:.9;}
   .archive-hint{font-size:11px;color:var(--muted);font-style:italic;}
-  .archive-viewing{background:var(--surface2);border:1px solid var(--accent2);
-    border-radius:4px;padding:2px 8px;font-size:12px;color:var(--accent2);white-space:nowrap;}
+  .archive-viewing{background:var(--surface2);border:1px solid var(--accent2);border-radius:4px;padding:2px 8px;font-size:12px;color:var(--accent2);white-space:nowrap;}
 </style>
 </head>
 <body class="theme-dark">
@@ -350,8 +197,6 @@ refreshArchiveSelect('');
 </header>
 
 <div class="layout">
-
-  <!-- НАЛИЧНОСТИ -->
   <div class="panel">
     <div class="panel-header">
       <span class="panel-title">📦 Наличности</span>
@@ -378,7 +223,6 @@ refreshArchiveSelect('');
     </div>
   </div>
 
-  <!-- ПРОДАЖБИ -->
   <div class="panel">
     <div class="panel-header">
       <span class="panel-title">🛒 Продажби за 4 седмици</span>
@@ -390,7 +234,7 @@ refreshArchiveSelect('');
       </div>
     </div>
     <div class="import-zone">
-      <span class="col-hint">Колони: <b>ID_Артикул · Иmе_Артикул · Продадени</b> (за 4 седмици)</span>
+      <span class="col-hint">Колони: <b>ID_Артикул · Иmе_Артикул · Продадени</b></span>
       <span class="import-status" id="salesImportStatus"></span>
     </div>
     <div class="row-count" id="salesCount">0 реда</div>
@@ -405,7 +249,6 @@ refreshArchiveSelect('');
     </div>
   </div>
 
-  <!-- ПРАГ + АРХИВ -->
   <div class="threshold-bar">
     <div class="thresh-left">
       <div class="thresh-label">⚙ Праг за сигнализиране</div>
@@ -418,7 +261,7 @@ refreshArchiveSelect('');
       </div>
     </div>
     <div class="thresh-definition">
-      <strong>ПРАГ</strong> — какво ще изтече от днес до следващите <strong id="threshDefNum">6</strong> седмици?<span style="font-size:11px;color:var(--muted);display:block;margin-top:2px;">Артикулите с оставащ срок под прага получават сигнал EMAIL. Движи плъзгача и натисни ▶ Изчисли.</span>
+      <strong>ПРАГ</strong> — какво ще изтече от днес до следващите <strong id="threshDefNum">6</strong> седмици?<span style="font-size:11px;color:var(--muted);display:block;margin-top:2px;">Артикулите с оставащ срок под прага получават сигнал EMAIL.</span>
     </div>
     <div class="archive-section">
       <div class="archive-label">🗂 Архив на справките</div>
@@ -427,14 +270,13 @@ refreshArchiveSelect('');
           <option value="">— Избери запазена справка —</option>
         </select>
         <button class="btn-arch-del" onclick="deleteSnapshot()">🗑 Изтрий</button>
-        <button class="btn-save-snap" id="saveSnapBtn" style="display:none" onclick="saveSnapshot()">💾 Запази справката</button>
+        <button class="btn-save-snap" id="saveSnapBtn" style="display:none" onclick="saveSnapshot()">💾 Запази</button>
       </div>
       <span class="archive-hint" id="archiveHint"></span>
     </div>
   </div>
 
-  <!-- БУТОНИ -->
-  <div style="grid-column:1/-1;background:transparent;border:none;">
+  <div style="grid-column:1/-1;">
     <div class="actions-row">
       <button class="run-btn" onclick="runAnalysis()">▶ Изчисли анализа</button>
       <div class="search-inline">
@@ -445,7 +287,6 @@ refreshArchiveSelect('');
     </div>
   </div>
 
-  <!-- РЕЗУЛТАТИ -->
   <div class="results-panel">
     <div class="results-header">
       <span class="results-title">📊 Резултати — FEFO анализ</span>
@@ -468,21 +309,19 @@ refreshArchiveSelect('');
 </div>
 
 <script>
-// ── Theme ─────────────────────────────────────────────────────────────────────
+// ── Скриптове и Логика ──
 function setTheme(t,el){
   document.body.className='theme-'+t;
   document.querySelectorAll('.theme-dot').forEach(d=>d.classList.remove('active'));
   el.classList.add('active');
 }
 
-// ── Threshold ─────────────────────────────────────────────────────────────────
 function syncThresh(){
   const v=parseInt(document.getElementById('threshRange').value)||6;
   document.getElementById('threshVal').textContent=v;
   document.getElementById('threshDefNum').textContent=v;
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
 function makeInput(val,type,ph){const i=document.createElement('input');i.type=type||'text';i.value=val!=null?val:'';i.placeholder=ph||'';if(type==='number')i.min='0';return i;}
 function updateCount(bid,cid){document.getElementById(cid).textContent=document.getElementById(bid).querySelectorAll('tr').length+' реда';}
 function delBtn(row,cid,bid){const b=document.createElement('button');b.className='del-btn';b.textContent='✕';b.onclick=()=>{row.remove();updateCount(bid,cid);};return b;}
@@ -523,7 +362,6 @@ function clearAll(){
   lastResults=[];
 }
 
-// ── Date helpers ──────────────────────────────────────────────────────────────
 function parseExcelDate(val){
   if(!val)return'';
   if(val instanceof Date)return val.toISOString().split('T')[0];
@@ -535,10 +373,7 @@ function parseExcelDate(val){
   return s;
 }
 function fmtDate(d){
-  const dd=String(d.getDate()).padStart(2,'0');
-  const mm=String(d.getMonth()+1).padStart(2,'0');
-  const yyyy=d.getFullYear();
-  return`${dd}.${mm}.${yyyy}`;
+  return `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`;
 }
 function fmt(n,dec=1){if(n===null||!isFinite(n))return'∞';return n.toFixed(dec);}
 
@@ -547,7 +382,6 @@ function findCol(hdrs,...kws){
   return-1;
 }
 
-// ── Import ────────────────────────────────────────────────────────────────────
 function importStock(input){
   const file=input.files[0];if(!file)return;
   const reader=new FileReader();
@@ -558,10 +392,10 @@ function importStock(input){
       const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
       if(rows.length<2){alert('Файлът е празен.');return;}
       const hdrs=rows[0].map(h=>String(h).trim());
-      const cId=findCol(hdrs,'id_артикул','idартикул','id артикул','id','artid','artkul_id');
-      const cName=findCol(hdrs,'имеартикул','иmeартикул','имеартикул','имеарт','name','наименование','артикул','product');
-      const cQty=findCol(hdrs,'наличност','количество','qty','amount','бр','stock');
-      const cExp=findCol(hdrs,'срок','годен','expir','дата','date','best','shelf');
+      const cId=findCol(hdrs,'id_артикул','idартикул','id','artid');
+      const cName=findCol(hdrs,'имеартикул','наименование','артикул','product','name');
+      const cQty=findCol(hdrs,'наличност','количество','qty','amount','stock');
+      const cExp=findCol(hdrs,'срок','годен','expir','дата','date');
       if(cId===-1||cQty===-1||cExp===-1){alert('Не намерих нужните колони.\nНамерени: '+hdrs.join(', '));return;}
       clearTable('stockBody');let n=0;
       for(let i=1;i<rows.length;i++){
@@ -584,9 +418,9 @@ function importSales(input){
       const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
       if(rows.length<2){alert('Файлът е празен.');return;}
       const hdrs=rows[0].map(h=>String(h).trim());
-      const cId=findCol(hdrs,'id_артикул','idартикул','id артикул','id','artid','artkul_id');
-      const cName=findCol(hdrs,'имеартикул','иmeартикул','имеартикул','имеарт','name','наименование','артикул','product');
-      const cQty=findCol(hdrs,'продадени','продажби','sales','qty','amount','бр','седмица','week');
+      const cId=findCol(hdrs,'id_артикул','idартикул','id','artid');
+      const cName=findCol(hdrs,'имеартикул','наименование','артикул','product','name');
+      const cQty=findCol(hdrs,'продадени','продажби','sales','qty');
       if(cId===-1||cQty===-1){alert('Не намерих нужните колони.\nНамерени: '+hdrs.join(', '));return;}
       clearTable('salesBody');let n=0;
       for(let i=1;i<rows.length;i++){
@@ -599,7 +433,6 @@ function importSales(input){
   reader.readAsBinaryString(file);input.value='';
 }
 
-// ── Read tables ───────────────────────────────────────────────────────────────
 function readStock(){
   const lots=[];
   document.querySelectorAll('#stockBody tr').forEach(tr=>{
@@ -617,8 +450,7 @@ function readSales(){
   });return map;
 }
 
-// ── FEFO analysis ─────────────────────────────────────────────────────────────
-const SELL_CUTOFF_WEEKS = 3; // не се продава в последните 3 седмици преди изтичане
+const SELL_CUTOFF_WEEKS = 3;
 
 function fefoAnalysis(lots,salesMap,today,thresh){
   const byId={};
@@ -637,32 +469,18 @@ function fefoAnalysis(lots,salesMap,today,thresh){
     const artName=art.name||(se?se.name:'')||'';
     const totalStock=art.lots.reduce((s,l)=>s+l.qty,0);
 
-    // Колона 3 седмици преди края:
-    // Бройките под прага, за които оставащото продажбено прозорче (седмици до изтич. - 3) × weekSales
     const lotsCalc=art.lots.map(lot=>{
       const weeksToExp=(lot.exp-today)/WEEK_MS;
-      // Реалното продажбено прозорче: свалено с SELL_CUTOFF_WEEKS
       const sellableWeeks=Math.max(0,weeksToExp-SELL_CUTOFF_WEEKS);
       const sellable=weekSales>0?Math.min(lot.qty,weekSales*sellableWeeks):0;
       const waste=Math.max(0,lot.qty-sellable);
-      // Бройки под прага на 3 седм. от края
-      const nearExpiry=weeksToExp<thresh?lot.qty:0;
-      // Количество продаваемо 3 седм. преди края (само за лотовете под прага)
-      const sellIn3wBeforeExp=weekSales>0&&weeksToExp<thresh?Math.min(lot.qty,weekSales*sellableWeeks):0;
-      return{exp:lot.exp,qty:lot.qty,weeksToExp,sellableWeeks,sellable,waste,nearExpiry,sellIn3wBeforeExp};
+      return{exp:lot.exp,qty:lot.qty,weeksToExp,sellableWeeks,sellable,waste};
     });
 
     const weeksToExpMin=(art.lots[0].exp-today)/WEEK_MS;
     const weeksStock=weekSales>0?totalStock/weekSales:Infinity;
     const totalSellable=lotsCalc.reduce((s,l)=>s+l.sellable,0);
     const totalWaste=lotsCalc.reduce((s,l)=>s+l.waste,0);
-
-    // Бройки под прага (изтичат в рамките на праг седмици)
-    const qtyUnderThresh=lotsCalc.reduce((s,l)=>s+(l.weeksToExp<thresh?l.qty:0),0);
-    // Продаваемо 3 седм. преди края (реалното продажбено прозорче за тези лотове)
-    const sellable3wBefore=lotsCalc.reduce((s,l)=>s+l.sellIn3wBeforeExp,0);
-    // Бройки, които ще трябва да се продадат със срок под 3 седмици
-    const hardToSell=Math.max(0,qtyUnderThresh-sellable3wBefore);
 
     const emailByExp=weeksToExpMin<thresh;
     const emailByWaste=totalWaste>0;
@@ -680,57 +498,30 @@ function fefoAnalysis(lots,salesMap,today,thresh){
   return results;
 }
 
-// ── Insight text generator ────────────────────────────────────────────────────
 function buildInsight(r){
   const thresh=r.thresh;
   const ws=r.weeksStock!==null?fmt(r.weeksStock):'∞';
   const waste=Math.round(r.totalWaste);
-  // Изчисляваме директно от лотовете: бройки под прага минус продаваемото им количество
   const hard=Math.round(Math.max(0, r.lotsCalc.filter(l=>l.weeksToExp<thresh).reduce((s,l)=>s+l.waste,0)));
   const sales4w=Math.round(r.monthSales);
 
-  // Лотовете под прага с дати и количества
   const lotsUnder=r.lotsCalc.filter(l=>l.weeksToExp<thresh);
   const lotsList=lotsUnder.map(l=>`<b>${Math.round(l.qty)} бр.</b> с краен срок ${fmtDate(l.exp)}`).join(', ');
-
-  // Лотовете с очакван брак (срок над прага, но ниски продажби)
   const wasteLots=r.lotsCalc.filter(l=>l.waste>0&&l.weeksToExp>=thresh);
   const wasteList=wasteLots.map(l=>`<b>${Math.round(l.waste)} бр.</b> с краен срок ${fmtDate(l.exp)}`).join(', ');
 
-  // ── КРАТЪК СРОК (без брак) ────────────────────────────────────────────────
-  // Срокът е под прага, но при текущ темп всичко ще се продаде навреме
   if(r.reason==='Кратък срок'){
-    return{
-      cls:'warn-insight',
-      text:`Имате ${lotsList}, изтичащи в рамките на <b>${thresh}</b> седмици. При обем от <b>${sales4w} бр. на 4 седмици</b> тази наличност ще се продаде навреме и няма да има стока, подадена към клиент със срок под ${SELL_CUTOFF_WEEKS} седмици.`
-    };
+    return{cls:'warn-insight',text:`Имате ${lotsList}, изтичащи в рамките на <b>${thresh}</b> седмици. Стоката ще се продаде навреме.`};
   }
-
-  // ── КРАТЪК СРОК + БРАК ───────────────────────────────────────────────────
-  // Срокът е под прага И при текущ темп ще остане непродадено
   if(r.reason==='Брак + Кратък срок'){
-    return{
-      cls:'danger-insight',
-      text:`Имате ${lotsList}, изтичащи в рамките на <b>${thresh}</b> седмици. При обем от <b>${sales4w} бр. на 4 седмици</b> ще останат <span class="insight-num">${hard}</span> бр., които ще трябва да се продадат в последните ${SELL_CUTOFF_WEEKS} седмици преди крайния срок — или ще станат брак.`
-    };
+    return{cls:'danger-insight',text:`Имате ${lotsList}, изтичащи в рамките на <b>${thresh}</b> седмици. Ще останат <span class="insight-num">${hard}</span> бр. брак.`};
   }
-
-  // ── ОЧАКВАН БРАК (срокът е над прага, но продажбите са ниски) ────────────
   if(r.reason==='Очакван брак'){
-    return{
-      cls:'warn-insight',
-      text:`Крайните срокове са извън прага от <b>${thresh}</b> седмици, но при обем от <b>${sales4w} бр. на 4 седмици</b> има риск от брак: ${wasteList||`<b>${waste} бр.</b>`} е вероятно да не се продаде преди последните ${SELL_CUTOFF_WEEKS} седмици преди изтичане.`
-    };
+    return{cls:'warn-insight',text:`Крайните срокове са извън прага, но има риск от брак: ${wasteList||`<b>${waste} бр.</b>`}`};
   }
-
-  // ── OK БЕЗ БРАК ──────────────────────────────────────────────────────────
-  return{
-    cls:'',
-    text:`При обем от <b>${sales4w} бр. на 4 седмици</b> имате запас за <span class="insight-num">${ws}</span> седмици. Няма наличности, изтичащи в рамките на ${thresh} седмици, и не се очаква брак.`
-  };
+  return{cls:'',text:`При запас за <span class="insight-num">${ws}</span> седмици не се очаква брак.`};
 }
 
-// ── Toggle detail row ─────────────────────────────────────────────────────────
 function toggleDetail(btn){
   const mainRow=btn.closest('tr');
   const detailRow=mainRow.nextElementSibling;
@@ -742,7 +533,6 @@ function toggleDetail(btn){
 
 let lastResults=[];
 
-// ── Run analysis ──────────────────────────────────────────────────────────────
 function runAnalysis(){
   const today=new Date();today.setHours(0,0,0,0);
   const thresh=parseInt(document.getElementById('threshRange').value)||6;
@@ -765,18 +555,15 @@ function runAnalysis(){
   let html=`<table class="results" id="resultsTable">
   <colgroup><col><col><col><col><col><col><col><col><col><col><col><col><col></colgroup>
   <thead><tr>
-    <th>▼</th><th>ID</th><th>Артикул</th><th>Налич.</th><th>Прод. / 4 седм.</th>
+    <th>▼</th><th>ID</th><th>Артикул</th><th>Налич.</th><th>Прод.</th>
     <th>Седм. запас</th><th>Най-ранен срок</th><th>Седм. до изтич.</th>
-    <th>Праг (седм.)</th><th>Продав. (−3 седм.)</th><th>Очак. брак</th>
-    <th>Причина</th><th>Действие</th>
+    <th>Праг</th><th>Продав.</th><th>Очак. брак</th><th>Причина</th><th>Действие</th>
   </tr></thead><tbody>`;
 
   results.forEach((r,idx)=>{
     const wc=r.weeksToExpMin<(r.thresh*0.5)?'num-danger':r.weeksToExpMin<r.thresh?'num-warn':'num-ok';
     const wsc=r.totalWaste>0?'num-danger':'num-ok';
-    const badge=r.action==='OK'
-      ?'<span class="badge badge-ok">✓ OK</span>'
-      :'<span class="badge badge-email">📧 EMAIL</span>';
+    const badge=r.action==='OK' ?'<span class="badge badge-ok">✓ OK</span>':'<span class="badge badge-email">📧 EMAIL</span>';
     const emailCls=r.action==='EMAIL'?'row-email':'';
     const ins=buildInsight(r);
 
@@ -812,15 +599,12 @@ function runAnalysis(){
   document.getElementById('archiveHint').textContent='';
 }
 
-
-// ── Filters ───────────────────────────────────────────────────────────────────
 function applyFilters(){
   const q=(document.getElementById('searchInput').value||'').toLowerCase().trim();
   const af=(document.getElementById('actionFilter').value||'').toUpperCase();
   const tbl=document.getElementById('resultsTable');
   let vis=0,total=0;
   if(tbl){
-    // Work on pairs: main row + detail row
     const allRows=[...tbl.querySelectorAll('tbody tr')];
     const mainRows=allRows.filter(tr=>!tr.classList.contains('row-detail')&&!tr.classList.contains('no-match-row'));
     total=mainRows.length;
@@ -831,8 +615,7 @@ function applyFilters(){
       const ma=!af||act===af;
       const show=mq&&ma;
       tr.classList.toggle('row-hidden',!show);
-      if(detailRow&&detailRow.classList.contains('row-detail'))
-        detailRow.classList.toggle('row-hidden',!show);
+      if(detailRow&&detailRow.classList.contains('row-detail')) detailRow.classList.toggle('row-hidden',!show);
       if(show)vis++;
     });
     let nm=tbl.querySelector('.no-match-row');
@@ -844,7 +627,6 @@ function applyFilters(){
     } else if(nm) nm.style.display='none';
     document.getElementById('filterCount').textContent=vis+' / '+total+' артикула';
   }
-  // Filter input tables
   ['stockBody','salesBody'].forEach(bid=>{
     document.querySelectorAll(`#${bid} tr`).forEach(tr=>{
       if(!q){tr.style.display='';return;}
@@ -855,7 +637,6 @@ function applyFilters(){
   });
 }
 
-// ── Excel export ──────────────────────────────────────────────────────────────
 function exportResults(){
   if(!lastResults.length)return;
   const today=new Date();
@@ -866,20 +647,10 @@ function exportResults(){
     return mq&&(!af||r.action===af);
   });
   if(!toExport.length){alert('Няма редове за експорт.');return;}
-  const thresh=parseInt(document.getElementById('threshRange').value)||6;
-  const data=[['ID','Артикул','Наличност','Прод./4 седм.','Седм. запас','Най-ранен срок',
-    'Седм. до изтич.','Праг (седм.)','Продав. (−3 седм.)','Очак. брак','Причина','Действие','Анализ']];
+  const data=[['ID','Артикул','Наличност','Прод./4 седм.','Седм. запас','Най-ранен срок','Седм. до изтич.','Праг','Продав.','Очак. брак','Причина','Действие','Анализ']];
   toExport.forEach(r=>{
     const ins=buildInsight(r);
-    data.push([
-      r.id,r.name||'',r.totalStock,r.monthSales,
-      r.weeksStock!==null?+fmt(r.weeksStock):'',
-      fmtDate(new Date(r.lotsCalc[0].exp)),
-      +fmt(r.weeksToExpMin),r.thresh,
-      +fmt(r.totalSellable,0),+fmt(r.totalWaste,0),
-      r.reason,r.action,
-      stripHtml(ins.text)
-    ]);
+    data.push([r.id,r.name||'',r.totalStock,r.monthSales,r.weeksStock!==null?+fmt(r.weeksStock):'',fmtDate(new Date(r.lotsCalc[0].exp)),+fmt(r.weeksToExpMin),r.thresh,+fmt(r.totalSellable,0),+fmt(r.totalWaste,0),r.reason,r.action,stripHtml(ins.text)]);
   });
   const ws=XLSX.utils.aoa_to_sheet(data);
   ws['!cols']=[6,22,10,12,10,12,12,8,14,10,14,8,60].map(w=>({wch:w}));
@@ -888,7 +659,6 @@ function exportResults(){
   XLSX.writeFile(wb,`FEFO_${today.toISOString().split('T')[0]}${af?'_'+af:''}.xlsx`);
 }
 
-// ── Word export ───────────────────────────────────────────────────────────────
 function stripHtml(s){return s.replace(/<[^>]+>/g,'');}
 
 function exportWord(){
@@ -910,103 +680,36 @@ function exportWord(){
     const wc=r.weeksToExpMin<(r.thresh*0.5)?'#c02020':r.weeksToExpMin<r.thresh?'#b05000':'#1a6030';
     const wsc=r.totalWaste>0?'#c02020':'#1a6030';
     const ws=r.weeksStock!==null?fmt(r.weeksStock):'∞';
-    return `
-      <tr>
-        <td><b>${r.id}</b></td>
-        <td style="min-width:120pt">${r.name||'—'}</td>
-        <td>${r.totalStock.toFixed(0)}</td>
-        <td>${r.monthSales.toFixed(0)}</td>
-        <td style="color:${wc};font-weight:bold">${fmt(r.weeksToExpMin)}</td>
-        <td>${r.thresh}</td>
-        <td>${fmtDate(new Date(r.lotsCalc[0].exp))}</td>
-        <td>${ws}</td>
-        <td>${fmt(r.totalSellable,0)}</td>
-        <td style="color:${wsc};font-weight:bold">${fmt(r.totalWaste,0)}</td>
-        <td>${r.reason}</td>
-        <td style="color:${acColor};font-weight:bold">${ac}</td>
-      </tr>
+    return `<tr><td><b>${r.id}</b></td><td style="min-width:120pt">${r.name||'—'}</td><td>${r.totalStock.toFixed(0)}</td><td>${r.monthSales.toFixed(0)}</td><td style="color:${wc};font-weight:bold">${fmt(r.weeksToExpMin)}</td><td>${r.thresh}</td><td>${fmtDate(new Date(r.lotsCalc[0].exp))}</td><td>${ws}</td><td>${fmt(r.totalSellable,0)}</td><td style="color:${wsc};font-weight:bold">${fmt(r.totalWaste,0)}</td><td>${r.reason}</td><td style="color:${acColor};font-weight:bold">${ac}</td></tr>
       <tr><td colspan="12" style="background:#eef2fa;padding:8pt 12pt;font-size:10pt;color:#222;border-top:none">${stripHtml(ins.text)}</td></tr>`;
   }).join('');
 
-  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8">
-  <style>
-    body{font-family:Arial,sans-serif;font-size:10pt;margin:20px;}
-    h1{font-size:15pt;color:#1a3d78;}
-    h2{font-size:11pt;color:#444;margin-top:0;margin-bottom:14pt;}
-    table{width:100%;border-collapse:collapse;margin-bottom:16pt;table-layout:fixed;}
-    th{background:#1a3d78;color:#fff;padding:5pt 6pt;font-size:9pt;text-align:left;word-break:break-word;}
-    td{padding:4pt 6pt;border:1px solid #c8cce0;font-size:9.5pt;vertical-align:top;word-break:break-word;}
-    tr:nth-child(4n+3) td:not([colspan]){background:#f0f4fb;}
-  
-  /* ── Архив ── */
-  .archive-bar{grid-column:1/-1;background:var(--surface);border:1px solid var(--border);
-    border-radius:var(--radius);padding:11px 18px;display:flex;align-items:center;
-    gap:12px;flex-wrap:wrap;}
-  .archive-label{font-size:13px;font-weight:700;color:var(--accent2);white-space:nowrap;}
-  #archiveSelect{background:var(--input-bg);border:1px solid var(--border);color:var(--text);
-    font-family:var(--font);font-size:13px;padding:6px 10px;border-radius:6px;
-    cursor:pointer;outline:none;max-width:320px;flex:1;}
-  #archiveSelect option{background:var(--surface);}
-  .btn-arch-del{background:var(--del-hover);color:var(--danger);border:1px solid var(--danger);
-    opacity:.75;font-size:12px;padding:6px 12px;border-radius:5px;}
-  .btn-save-snap{background:linear-gradient(135deg,#1a7a4a,#0a5a8a);color:#fff;
-    font-size:12px;font-weight:700;padding:6px 14px;border-radius:5px;}
-  .btn-save-snap:hover{opacity:.9;}
-  .archive-hint{font-size:11px;color:var(--muted);font-style:italic;}
-  .archive-viewing{background:var(--surface2);border:1px solid var(--accent2);
-    border-radius:4px;padding:3px 10px;font-size:12px;color:var(--accent2);white-space:nowrap;}
-</style></head><body>
-  <h1>FEFO Анализ — ${fmtDate(today)}</h1>
-  <h2>Праг: ${thresh} седмици &nbsp;|&nbsp; Артикули: ${toExport.length} &nbsp;|&nbsp; Минимум 3 седмици преди изтичане</h2>
-  <table>
-    <colgroup><col style="width:5%"><col style="width:14%"><col style="width:7%"><col style="width:8%"><col style="width:6%"><col style="width:5%"><col style="width:10%"><col style="width:6%"><col style="width:8%"><col style="width:7%"><col style="width:12%"><col style="width:7%"></colgroup>
-    <thead><tr>
-      <th>ID</th><th>Артикул</th><th>Налич.</th><th>Прод./4 седм.</th>
-      <th>Седм. до изтич.</th><th>Праг</th><th>Най-ранен срок</th>
-      <th>Седм. запас</th><th>Продав. (−3 седм.)</th><th>Очак. брак</th>
-      <th>Причина</th><th>Действие</th>
-    </tr></thead>
-    <tbody>${rows}</tbody>
-  </table>
-  </body></html>`;
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{font-family:Arial,sans-serif;font-size:10pt;margin:20px;}h1{font-size:15pt;color:#1a3d78;}h2{font-size:11pt;color:#444;}table{width:100%;border-collapse:collapse;}th{background:#1a3d78;color:#fff;padding:5pt 6pt;font-size:9pt;text-align:left;}td{padding:4pt 6pt;border:1px solid #c8cce0;font-size:9.5pt;vertical-align:top;}</style></head><body><h1>FEFO Анализ — ${fmtDate(today)}</h1><h2>Праг: ${thresh} седмици</h2><table><thead><tr><th>ID</th><th>Артикул</th><th>Налич.</th><th>Прод.</th><th>Седм. до изтич.</th><th>Праг</th><th>Най-ранен срок</th><th>Седм. запас</th><th>Продав.</th><th>Очак. брак</th><th>Причина</th><th>Действие</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
 
   const blob=new Blob(['\ufeff'+html],{type:'application/msword;charset=utf-8'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
-  a.download=`FEFO_Обяснение_${today.toISOString().split('T')[0]}${af?'_'+af:''}.doc`;
+  a.download=`FEFO_Обяснение_${today.toISOString().split('T')[0]}.doc`;
   a.click();
 }
 
-// ── Demo ──────────────────────────────────────────────────────────────────────
+// ── Demo ──
 (function(){
   const today=new Date();
   const d=w=>{const dt=new Date(today);dt.setDate(dt.getDate()+w*7);return dt.toISOString().split('T')[0];};
-  addStockRow('1001','Кисело мляко 400г',350,d(6));
-  addStockRow('1001','Кисело мляко 400г',200,d(11));
-  addStockRow('1002','Сирене 500г',80,d(4));
-  addStockRow('1002','Сирене 500г',120,d(8));
-  addStockRow('1003','Масло 250г',500,d(20));
-  addStockRow('1004','Крема сирене',30,d(2));
-  addStockRow('1005','Заквасена сметана',90,d(10));
-  addStockRow('1005','Заквасена сметана',60,d(14));
-  addSalesRow('1001','Кисело мляко 400г',520);
-  addSalesRow('1002','Сирене 500г',173);
-  addSalesRow('1003','Масло 250г',108);
-  addSalesRow('1004','Крема сирене',65);
+  addStockRow('1001','Кисело мляко 400г',350,d(6));addStockRow('1001','Кисело мляко 400г',200,d(11));
+  addStockRow('1002','Сирене 500г',80,d(4));addStockRow('1002','Сирене 500г',120,d(8));
+  addStockRow('1003','Масло 250г',500,d(20));addStockRow('1004','Крема сирене',30,d(2));
+  addStockRow('1005','Заквасена сметана',90,d(10));addStockRow('1005','Заквасена сметана',60,d(14));
+  addSalesRow('1001','Кисело мляко 400г',520);addSalesRow('1002','Сирене 500г',173);
+  addSalesRow('1003','Масло 250г',108);addSalesRow('1004','Крема сирене',65);
   addSalesRow('1005','Заквасена сметана',152);
 })();
 
-// ══ АРХИВ (localStorage) ═════════════════════════════════════════════════════
+// ══ АРХИВ (localStorage) ══
 const ARCHIVE_KEY = 'fefo_archive';
-
-function archiveGetAll(){
-  try{ return JSON.parse(localStorage.getItem(ARCHIVE_KEY)||'[]'); }
-  catch(e){ return []; }
-}
-
-function archiveSaveAll(arr){
-  localStorage.setItem(ARCHIVE_KEY, JSON.stringify(arr));
-}
+function archiveGetAll(){ try{ return JSON.parse(localStorage.getItem(ARCHIVE_KEY)||'[]'); } catch(e){ return []; } }
+function archiveSaveAll(arr){ localStorage.setItem(ARCHIVE_KEY, JSON.stringify(arr)); }
 
 function refreshArchiveSelect(selectVal){
   const arr = archiveGetAll();
@@ -1014,27 +717,18 @@ function refreshArchiveSelect(selectVal){
   sel.innerHTML = '<option value="">— Избери запазена справка —</option>';
   arr.forEach((snap,i)=>{
     const opt = document.createElement('option');
-    opt.value = i;
-    opt.textContent = snap.label;
-    sel.appendChild(opt);
+    opt.value = i;opt.textContent = snap.label;sel.appendChild(opt);
   });
   if(selectVal!==undefined) sel.value = selectVal;
-  document.getElementById('archiveHint').textContent =
-    arr.length ? arr.length + ' запазени справки' : 'Няма запазени справки';
+  document.getElementById('archiveHint').textContent = arr.length ? arr.length + ' запазени справки' : 'Няма запазени справки';
 }
 
 function saveSnapshot(){
   if(!lastResults.length){ alert('Няма изчислен анализ за запазване.'); return; }
   const today = new Date();
   const thresh = parseInt(document.getElementById('threshRange').value)||6;
-  const dd=String(today.getDate()).padStart(2,'0');
-  const mm=String(today.getMonth()+1).padStart(2,'0');
-  const yyyy=today.getFullYear();
-  const hh=String(today.getHours()).padStart(2,'0');
-  const min=String(today.getMinutes()).padStart(2,'0');
-  const label = `${dd}.${mm}.${yyyy}, ${hh}:${min}`;
+  const label = `${String(today.getDate()).padStart(2,'0')}.${String(today.getMonth()+1).padStart(2,'0')}.${today.getFullYear()}, ${String(today.getHours()).padStart(2,'0')}:${String(today.getMinutes()).padStart(2,'0')}`;
 
-  // Запазваме: данните от таблиците + резултатите + HTML на таблицата + дата
   const stockData = [];
   document.querySelectorAll('#stockBody tr').forEach(tr=>{
     const inp=tr.querySelectorAll('input');if(!inp.length)return;
@@ -1047,11 +741,7 @@ function saveSnapshot(){
   });
 
   const snap = {
-    label,
-    date: today.toISOString(),
-    thresh,
-    stockData,
-    salesData,
+    label, date: today.toISOString(), thresh, stockData, salesData,
     summaryHTML: document.getElementById('summaryBar').innerHTML,
     resultsHTML: document.getElementById('resultsContent').innerHTML,
     resultsCount: lastResults.length,
@@ -1059,7 +749,7 @@ function saveSnapshot(){
   };
 
   const arr = archiveGetAll();
-  arr.unshift(snap); // най-новото първо
+  arr.unshift(snap);
   archiveSaveAll(arr);
   refreshArchiveSelect(0);
   document.getElementById('archiveHint').textContent = '✓ Справката е запазена!';
@@ -1072,7 +762,6 @@ function loadSnapshot(idx){
   const snap = arr[parseInt(idx)];
   if(!snap){ alert('Справката не е намерена.'); return; }
 
-  // Зареждаме входните данни
   clearTable('stockBody');
   snap.stockData.forEach(r=> addStockRow(r[0],r[1],parseFloat(r[2])||0,r[3]));
   updateCount('stockBody','stockCount');
@@ -1081,14 +770,11 @@ function loadSnapshot(idx){
   snap.salesData.forEach(r=> addSalesRow(r[0],r[1],parseFloat(r[2])||0));
   updateCount('salesBody','salesCount');
 
-  // Праг
   document.getElementById('threshRange').value = snap.thresh;
   syncThresh();
 
-  // Показваме стария анализ директно
   const sb = document.getElementById('summaryBar');
-  sb.innerHTML = snap.summaryHTML +
-    `<div class="summary-item"><span class="archive-viewing">📂 Архивна справка</span></div>`;
+  sb.innerHTML = snap.summaryHTML + `<div class="summary-item"><span class="archive-viewing">📂 Архивна справка</span></div>`;
   sb.style.display = 'flex';
 
   document.getElementById('resultsContent').innerHTML = snap.resultsHTML;
@@ -1096,21 +782,10 @@ function loadSnapshot(idx){
   document.getElementById('exportWordBtn').style.display = 'inline-block';
   document.getElementById('saveSnapBtn').style.display = 'none';
 
-  // Възстановяваме lastResults — конвертираме датите обратно към Date обекти
   lastResults = (snap.lastResults || []).map(r => ({
-    ...r,
-    monthSales: Number(r.monthSales) || 0,
-    weekSales: Number(r.weekSales) || 0,
-    totalStock: Number(r.totalStock) || 0,
-    totalSellable: Number(r.totalSellable) || 0,
-    totalWaste: Number(r.totalWaste) || 0,
-    lotsCalc: (r.lotsCalc || []).map(l => ({
-      ...l,
-      exp: new Date(l.exp),
-      qty: Number(l.qty) || 0,
-      waste: Number(l.waste) || 0,
-      sellable: Number(l.sellable) || 0
-    }))
+    ...r, monthSales: Number(r.monthSales) || 0, weekSales: Number(r.weekSales) || 0,
+    totalStock: Number(r.totalStock) || 0, totalSellable: Number(r.totalSellable) || 0, totalWaste: Number(r.totalWaste) || 0,
+    lotsCalc: (r.lotsCalc || []).map(l => ({ ...l, exp: new Date(l.exp), qty: Number(l.qty) || 0, waste: Number(l.waste) || 0, sellable: Number(l.sellable) || 0 }))
   }));
 
   document.getElementById('archiveHint').textContent = '📂 Заредена: ' + snap.label;
@@ -1128,9 +803,7 @@ function deleteSnapshot(){
   refreshArchiveSelect('');
 }
 
-// Инициализация при зареждане
 refreshArchiveSelect('');
-
 </script>
 </body>
 </html>
